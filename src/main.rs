@@ -7,6 +7,7 @@ use std::{
 use rdev::{simulate, EventType, SimulateError};
 
 fn main() {
+    println!("[+] Starting...");
     let ts = Arc::new(Mutex::new(Instant::now()));
     let ts2 = ts.clone();
 
@@ -21,20 +22,16 @@ fn main() {
     if let Err(error) = rdev::listen(move |event| {
         let mut ts = ts2.lock().unwrap();
         match event.event_type {
-            EventType::KeyPress(key) => {
-                println!("{:?}", key);
+            EventType::KeyPress(_key) => {
                 *ts = Instant::now();
             }
-            EventType::ButtonPress(button) => {
-                println!("{:?}", button);
+            EventType::ButtonPress(_button) => {
                 *ts = Instant::now();
             }
-            EventType::MouseMove { x, y } => {
-                println!("Mouse moved to ({}, {})", x, y);
+            EventType::MouseMove { .. } => {
                 *ts = Instant::now();
             }
-            EventType::Wheel { delta_x, delta_y } => {
-                println!("Wheel moved ({}, {})", delta_x, delta_y);
+            EventType::Wheel { .. } => {
                 *ts = Instant::now();
             }
             _ => (),
