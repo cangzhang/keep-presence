@@ -20,9 +20,9 @@ fn main() {
             "{} [{}] - {}",
             Local::now().format("%Y-%m-%dT%H:%M:%S"),
             record.level(),
-                record.args()
-            )
-        })
+            record.args()
+        )
+    })
         .filter(None, femme::LevelFilter::Info)
         .init();
 
@@ -32,33 +32,41 @@ fn main() {
     let ts2 = ts.clone();
 
     thread::spawn(move || {
-        let mut enigo = Enigo::new(&Settings::default()).unwrap();
         loop {
+            thread::sleep(time::Duration::from_secs(1));
+
             let mut ts = ts.lock().unwrap();
-            if Instant::now().duration_since(*ts)
-                > time::Duration::from_secs(KEEP_PRESENCE_INTERVAL)
+            let now = Instant::now();
+            if now.duration_since(*ts)
+                >= time::Duration::from_secs(KEEP_PRESENCE_INTERVAL)
             {
-                keep_presence(&mut enigo);
+                keep_presence();
                 *ts = Instant::now();
             }
-            thread::sleep(time::Duration::from_millis(300));
         }
     });
 
     if let Err(error) = rdev::listen(move |event| {
-        let mut ts = ts2.lock().unwrap();
         match event.event_type {
             EventType::KeyPress(_key) => {
+                let mut ts = ts2.lock().unwrap();
                 *ts = Instant::now();
+                log::debug!("key press");
             }
             EventType::ButtonPress(_button) => {
+                let mut ts = ts2.lock().unwrap();
                 *ts = Instant::now();
+                log::debug!("button press");
             }
             EventType::MouseMove { .. } => {
+                let mut ts = ts2.lock().unwrap();
                 *ts = Instant::now();
+                log::debug!("mouse move");
             }
             EventType::Wheel { .. } => {
+                let mut ts = ts2.lock().unwrap();
                 *ts = Instant::now();
+                log::debug!("wheel");
             }
             _ => (),
         }
@@ -67,8 +75,9 @@ fn main() {
     }
 }
 
-fn keep_presence(enigo: &mut Enigo) {
+fn keep_presence() {
+    let mut enigo = Enigo::new(&Settings::default()).unwrap();
     enigo.move_mouse(1, 1, Coordinate::Rel).unwrap();
     enigo.move_mouse(-1, -1, Coordinate::Rel).unwrap();
-    log::info!("+++ KEEP PRESENCE +++");
+    log::info!("KEEP PRESENCE");
 }
