@@ -14,15 +14,15 @@ const KEEP_PRESENCE_INTERVAL: u64 = 5 * 60;
 
 fn main() {
     Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{} [{}] - {}",
-            Local::now().format("%Y-%m-%dT%H:%M:%S"),
-            record.level(),
-            record.args()
-        )
-    })
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{} [{}] - {}",
+                Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                record.level(),
+                record.args()
+            )
+        })
         .filter(None, femme::LevelFilter::Info)
         .init();
 
@@ -31,45 +31,39 @@ fn main() {
     let ts = Arc::new(Mutex::new(Instant::now()));
     let ts2 = ts.clone();
 
-    thread::spawn(move || {
-        loop {
-            thread::sleep(time::Duration::from_secs(1));
+    thread::spawn(move || loop {
+        thread::sleep(time::Duration::from_secs(1));
 
-            let mut ts = ts.lock().unwrap();
-            let now = Instant::now();
-            if now.duration_since(*ts)
-                >= time::Duration::from_secs(KEEP_PRESENCE_INTERVAL)
-            {
-                keep_presence();
-                *ts = Instant::now();
-            }
+        let mut ts = ts.lock().unwrap();
+        let now = Instant::now();
+        if now.duration_since(*ts) >= time::Duration::from_secs(KEEP_PRESENCE_INTERVAL) {
+            keep_presence();
+            *ts = Instant::now();
         }
     });
 
-    if let Err(error) = rdev::listen(move |event| {
-        match event.event_type {
-            EventType::KeyPress(_key) => {
-                let mut ts = ts2.lock().unwrap();
-                *ts = Instant::now();
-                log::debug!("key press");
-            }
-            EventType::ButtonPress(_button) => {
-                let mut ts = ts2.lock().unwrap();
-                *ts = Instant::now();
-                log::debug!("button press");
-            }
-            EventType::MouseMove { .. } => {
-                let mut ts = ts2.lock().unwrap();
-                *ts = Instant::now();
-                log::debug!("mouse move");
-            }
-            EventType::Wheel { .. } => {
-                let mut ts = ts2.lock().unwrap();
-                *ts = Instant::now();
-                log::debug!("wheel");
-            }
-            _ => (),
+    if let Err(error) = rdev::listen(move |event| match event.event_type {
+        EventType::KeyPress(_key) => {
+            let mut ts = ts2.lock().unwrap();
+            *ts = Instant::now();
+            log::debug!("key press");
         }
+        EventType::ButtonPress(_button) => {
+            let mut ts = ts2.lock().unwrap();
+            *ts = Instant::now();
+            log::debug!("button press");
+        }
+        EventType::MouseMove { .. } => {
+            let mut ts = ts2.lock().unwrap();
+            *ts = Instant::now();
+            log::debug!("mouse move");
+        }
+        EventType::Wheel { .. } => {
+            let mut ts = ts2.lock().unwrap();
+            *ts = Instant::now();
+            log::debug!("wheel");
+        }
+        _ => (),
     }) {
         log::error!("Error: {:?}", error);
     }
