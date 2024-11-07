@@ -1,21 +1,47 @@
+use chrono::Local;
+use enigo::{Coordinate, Enigo, Mouse, Settings};
+use env_logger::Builder;
+use kv_log_macro as log;
+use rdev::EventType;
+use std::io::Write;
 use std::{
     sync::{Arc, Mutex},
     thread,
     time::{self, Instant},
 };
 
-use rdev::{simulate, EventType, SimulateError};
+const KEEP_PRESENCE_INTERVAL: u64 = 5 * 60;
 
 fn main() {
-    println!("[+] Starting...");
+    Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{} [{}] - {}",
+            Local::now().format("%Y-%m-%dT%H:%M:%S"),
+            record.level(),
+                record.args()
+            )
+        })
+        .filter(None, femme::LevelFilter::Info)
+        .init();
+
+    log::info!("Starting...");
+
     let ts = Arc::new(Mutex::new(Instant::now()));
     let ts2 = ts.clone();
 
-    thread::spawn(move || loop {
-        let mut ts = ts.lock().unwrap();
-        if Instant::now().duration_since(*ts) > time::Duration::from_secs(120) {
-            keep_presence();
-            *ts = Instant::now();
+    thread::spawn(move || {
+        let mut enigo = Enigo::new(&Settings::default()).unwrap();
+        loop {
+            let mut ts = ts.lock().unwrap();
+            if Instant::now().duration_since(*ts)
+                > time::Duration::from_secs(KEEP_PRESENCE_INTERVAL)
+            {
+                keep_presence(&mut enigo);
+                *ts = Instant::now();
+            }
+            thread::sleep(time::Duration::from_millis(300));
         }
     });
 
@@ -37,25 +63,12 @@ fn main() {
             _ => (),
         }
     }) {
-        println!("Error: {:?}", error);
+        log::error!("Error: {:?}", error);
     }
 }
 
-fn keep_presence() {
-    send(&EventType::MouseMove { x: 0., y: 0. });
-    send(&EventType::MouseMove { x: 200., y: 200. });
-    println!("+++ KEEP PRESENCE +++");
-}
-
-fn send(event_type: &EventType) {
-    let delay = time::Duration::from_millis(20);
-    match simulate(event_type) {
-        Ok(()) => (),
-        Err(SimulateError) => {
-            println!("We could not send {:?}", event_type);
-        }
-    }
-
-    // Let ths OS catchup (at least MacOS)
-    thread::sleep(delay);
+fn keep_presence(enigo: &mut Enigo) {
+    enigo.move_mouse(1, 1, Coordinate::Rel).unwrap();
+    enigo.move_mouse(-1, -1, Coordinate::Rel).unwrap();
+    log::info!("+++ KEEP PRESENCE +++");
 }
