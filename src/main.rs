@@ -1,9 +1,14 @@
+mod ui;
+
 use chrono::Local;
 use enigo::{Coordinate, Enigo, Mouse, Settings};
 use env_logger::Builder;
+use floem::prelude::create_rw_signal;
+use floem::reactive::{create_effect, SignalGet};
 use kv_log_macro as log;
 use rdev::EventType;
 use std::io::Write;
+use std::thread::JoinHandle;
 use std::{
     sync::{Arc, Mutex},
     thread,
@@ -29,37 +34,38 @@ fn main() {
     log::info!("Starting...");
 
     let ts = Arc::new(Mutex::new(Instant::now()));
-    let ts2 = ts.clone();
+    let presence_interval = create_rw_signal(KEEP_PRESENCE_INTERVAL);
 
-    thread::spawn(move || loop {
-        thread::sleep(time::Duration::from_secs(1));
-
-        let mut ts = ts.lock().unwrap();
-        let now = Instant::now();
-        if now.duration_since(*ts) >= time::Duration::from_secs(KEEP_PRESENCE_INTERVAL) {
-            keep_presence();
-            *ts = Instant::now();
-        }
+    let ts_clone = ts.clone();
+    let handle = Arc::new(Mutex::new(thread::spawn(|| ())));
+    create_effect(move |_| {
+        log::info!("=== presence interval: {}", presence_interval.get());
+        let mut h = handle.lock().unwrap();
+        // TODO: stop the old thread
+        let new_handler = spawn_timer(ts_clone.clone(), presence_interval.get());
+        *h = new_handler;
     });
+
+    ui::run(presence_interval);
 
     if let Err(error) = rdev::listen(move |event| match event.event_type {
         EventType::KeyPress(_key) => {
-            let mut ts = ts2.lock().unwrap();
+            let mut ts = ts.lock().unwrap();
             *ts = Instant::now();
             log::debug!("key press");
         }
         EventType::ButtonPress(_button) => {
-            let mut ts = ts2.lock().unwrap();
+            let mut ts = ts.lock().unwrap();
             *ts = Instant::now();
             log::debug!("button press");
         }
         EventType::MouseMove { .. } => {
-            let mut ts = ts2.lock().unwrap();
+            let mut ts = ts.lock().unwrap();
             *ts = Instant::now();
             log::debug!("mouse move");
         }
         EventType::Wheel { .. } => {
-            let mut ts = ts2.lock().unwrap();
+            let mut ts = ts.lock().unwrap();
             *ts = Instant::now();
             log::debug!("wheel");
         }
@@ -74,4 +80,18 @@ fn keep_presence() {
     enigo.move_mouse(1, 1, Coordinate::Rel).unwrap();
     enigo.move_mouse(-1, -1, Coordinate::Rel).unwrap();
     log::info!("KEEP PRESENCE");
+}
+
+fn spawn_timer(ts: Arc<Mutex<Instant>>, interval: u64) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        thread::sleep(time::Duration::from_secs(1));
+        log::info!("=== interval: {}", interval);
+
+        let mut ts = ts.lock().unwrap();
+        let now = Instant::now();
+        if now.duration_since(*ts) >= time::Duration::from_secs(interval) {
+            keep_presence();
+            *ts = Instant::now();
+        }
+    })
 }
