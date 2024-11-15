@@ -12,3 +12,5 @@ femme = "2.2.1"
 floem = "0.2.0"
 kv-log-macro = "1.0.7"
 rdev = { version = "0.5.3", features = ["unstable_grab"] }
+tokio = { version = "1.41.1", features = ["full"] }
+tokio-util = "0.7.12"

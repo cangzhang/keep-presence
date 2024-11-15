@@ -8,16 +8,16 @@ use floem::reactive::{create_effect, SignalGet};
 use kv_log_macro as log;
 use rdev::EventType;
 use std::io::Write;
-use std::thread::JoinHandle;
 use std::{
     sync::{Arc, Mutex},
-    thread,
     time::{self, Instant},
 };
+use tokio::task::JoinHandle;
 
 const KEEP_PRESENCE_INTERVAL: u64 = 5 * 60;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -37,13 +37,15 @@ fn main() {
     let presence_interval = create_rw_signal(KEEP_PRESENCE_INTERVAL);
 
     let ts_clone = ts.clone();
-    let handle = Arc::new(Mutex::new(thread::spawn(|| ())));
+    let handle = Arc::new(Mutex::new(None::<JoinHandle<()>>));
     create_effect(move |_| {
         log::info!("=== presence interval: {}", presence_interval.get());
-        let mut h = handle.lock().unwrap();
-        // TODO: stop the old thread
-        let new_handler = spawn_timer(ts_clone.clone(), presence_interval.get());
-        *h = new_handler;
+        let mut handle = handle.lock().unwrap();
+        if let Some(handle) = handle.as_mut() {
+            handle.abort();
+        }
+        let new_handle = spawn_timer(ts_clone.clone(), presence_interval.get());
+        *handle = Some(new_handle);
     });
 
     ui::run(presence_interval);
@@ -83,15 +85,16 @@ fn keep_presence() {
 }
 
 fn spawn_timer(ts: Arc<Mutex<Instant>>, interval: u64) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        thread::sleep(time::Duration::from_secs(1));
-        log::info!("=== interval: {}", interval);
-
-        let mut ts = ts.lock().unwrap();
-        let now = Instant::now();
-        if now.duration_since(*ts) >= time::Duration::from_secs(interval) {
-            keep_presence();
-            *ts = Instant::now();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(time::Duration::from_secs(1)).await;
+            log::info!("=== interval: {}", interval);
+            let mut ts = ts.lock().unwrap();
+            let now = Instant::now();
+            if now.duration_since(*ts) >= time::Duration::from_secs(interval) {
+                keep_presence();
+                *ts = Instant::now();
+            }
         }
     })
 }
