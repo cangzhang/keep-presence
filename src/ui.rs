@@ -12,13 +12,8 @@ use floem::{
 pub fn app_view(presence_interval: RwSignal<u64>) -> impl IntoView {
     let text = create_rw_signal("300".to_string());
 
-    // create_effect(move |_| {
-    //     if let Ok(seconds) = text.get().parse::<u64>() {
-    //         presence_interval.set(seconds);
-    //     }
-    // });
 
-    let view = stack((form({
+    stack((form({
         (
             form_item("Simple Input:".to_string(), 120.0, move || {
                 text_input(text)
@@ -37,9 +32,7 @@ pub fn app_view(presence_interval: RwSignal<u64>) -> impl IntoView {
             .flex_col()
             .items_center()
             .justify_center()
-    });
-
-    view
+    })
 }
 
 pub fn form<VT: ViewTuple + 'static>(children: VT) -> impl IntoView {
