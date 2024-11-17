@@ -1,4 +1,7 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
 mod ui;
 
@@ -50,33 +53,35 @@ async fn main() {
         *handle = Some(new_handle);
     });
 
-    ui::run(presence_interval);
+    tokio::spawn(async move {
+        if let Err(error) = rdev::listen(move |event| match event.event_type {
+            EventType::KeyPress(_key) => {
+                let mut ts = ts.lock().unwrap();
+                *ts = Instant::now();
+                log::warn!("key press");
+            }
+            EventType::ButtonPress(_button) => {
+                let mut ts = ts.lock().unwrap();
+                *ts = Instant::now();
+                log::warn!("button press");
+            }
+            EventType::MouseMove { .. } => {
+                let mut ts = ts.lock().unwrap();
+                *ts = Instant::now();
+                log::warn!("mouse move");
+            }
+            EventType::Wheel { .. } => {
+                let mut ts = ts.lock().unwrap();
+                *ts = Instant::now();
+                log::warn!("wheel");
+            }
+            _ => (),
+        }) {
+            log::error!("Error: {:?}", error);
+        }
+    });
 
-    if let Err(error) = rdev::listen(move |event| match event.event_type {
-        EventType::KeyPress(_key) => {
-            let mut ts = ts.lock().unwrap();
-            *ts = Instant::now();
-            log::debug!("key press");
-        }
-        EventType::ButtonPress(_button) => {
-            let mut ts = ts.lock().unwrap();
-            *ts = Instant::now();
-            log::debug!("button press");
-        }
-        EventType::MouseMove { .. } => {
-            let mut ts = ts.lock().unwrap();
-            *ts = Instant::now();
-            log::debug!("mouse move");
-        }
-        EventType::Wheel { .. } => {
-            let mut ts = ts.lock().unwrap();
-            *ts = Instant::now();
-            log::debug!("wheel");
-        }
-        _ => (),
-    }) {
-        log::error!("Error: {:?}", error);
-    }
+    ui::run(presence_interval);
 }
 
 fn keep_presence() {
